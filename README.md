@@ -393,6 +393,8 @@ Para iniciar a API e todos os serviços necessários ao seu funcionamento, utili
 
 #### Comando
 ```bash
+./gradlew build
+
 docker compose up
 ```
 ---
