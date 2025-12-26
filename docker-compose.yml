@@ -1,0 +1,80 @@
+services:
+  # ------------------------
+  # PostgreSQL
+  # ------------------------
+  postgres:
+    image: postgres:15
+    container_name: bank-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bank
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bank"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------
+  # LocalStack (SQS)
+  # ------------------------
+  localstack:
+    image: localstack/localstack:3.7
+    container_name: bank-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: sa-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------
+  # Balance API (Ktor)
+  # ------------------------
+  balance-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bank-balance-api
+    ports:
+      - "8080:8080"
+    environment:
+      KTOR_ENV: docker
+
+      DB_JDBC_URL: jdbc:postgresql://postgres:5432/bank
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+      AWS_REGION: sa-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT: http://localstack:4566
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/transacoes-financeiras-processadas
+      SQS_DLQ_URL: http://localstack:4566/000000000000/transacoes-financeiras-dlq
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z localhost 8080" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+volumes:
+  postgres_data:
+  localstack_data:
+
